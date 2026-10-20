@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tesla-location-charge-limits"
+version = "0.1.0"
+description = "Geofenced charge limits for your Teslas — per-place rules (home 80%, cabin 90%, road-trip charger 100%) auto-applied on arrival, Rivian-style, with an OpenAI-compatible chat surface to ask about and edit the rules in plain language"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Raphael Malikian", email = "rtmalikian@gmail.com" }]
+keywords = ["tesla", "fleet-api", "openai-compatible", "llm", "charge-limit", "geofence", "battery-health", "ev", "model-3", "model-y", "ollama"]
+dependencies = [
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Home Automation",
+]
+
+[project.scripts]
+tlcl = "tesla_location_limits.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/rtmalikian/tesla-location-charge-limits"
+Issues = "https://github.com/rtmalikian/tesla-location-charge-limits/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

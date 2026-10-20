@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tesla Location Charge Limits — Live Demo (POC)</title>
+<meta name="description" content="Interactive proof-of-concept demo of tesla-location-charge-limits: geofenced per-place charge limits for Teslas, Rivian-style. DEMO DATA — no real car.">
+<style>
+  :root { --bg:#0b0e13; --panel:#141922; --line:#232c3a; --text:#e8edf4; --muted:#93a1b5; --red:#e82127; --green:#37d67a; --amber:#f5a623; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:880px; margin:0 auto; padding:24px 16px 64px; }
+  header { text-align:center; padding:28px 0 8px; }
+  h1 { font-size:2rem; margin:0 0 8px; }
+  h1 .red { color:var(--red); }
+  .sub { color:var(--muted); max-width:660px; margin:0 auto; line-height:1.55; }
+  .badges { margin-top:14px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .badge { display:inline-block; padding:4px 12px; border:1px solid var(--line); border-radius:999px; color:var(--muted); font-size:.82rem; }
+  .badge b { color:var(--amber); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; margin-top:18px; }
+  .card h2 { margin:0 0 6px; font-size:1.05rem; }
+  .hint { color:var(--muted); font-size:.88rem; line-height:1.5; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  .btn { cursor:pointer; border:1px solid var(--line); background:#0f141d; color:var(--text); border-radius:10px; padding:10px 14px; font-size:.95rem; }
+  .btn:hover { border-color:var(--muted); }
+  .btn.active { border-color:var(--red); box-shadow:0 0 0 1px var(--red) inset; }
+  .btn small { display:block; color:var(--muted); font-size:.75rem; margin-top:2px; }
+  .btn.cmd { border-color:#2c4a63; }
+  .status { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-top:12px; }
+  .stat { background:#0f141d; border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .stat .k { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; }
+  .stat .v { font-size:1.25rem; margin-top:4px; }
+  .log { list-style:none; margin:12px 0 0; padding:0; max-height:280px; overflow-y:auto; font-size:.9rem; }
+  .log li { padding:8px 10px; border-left:3px solid var(--line); margin-bottom:8px; background:#0f141d; border-radius:0 8px 8px 0; line-height:1.45; }
+  .log li.send { border-color:var(--green); }
+  .log li.skip { border-color:var(--amber); }
+  .log li.none { border-color:var(--line); color:var(--muted); }
+  .chat { display:flex; gap:8px; margin-top:12px; }
+  .chat input { flex:1; background:#0f141d; border:1px solid var(--line); color:var(--text); border-radius:10px; padding:10px 12px; font-size:.95rem; }
+  .chatlog { margin-top:10px; font-size:.92rem; }
+  .chatlog .q { color:var(--muted); margin:8px 0 2px; }
+  .chatlog .a { margin:0 0 4px 12px; line-height:1.5; }
+  .reset { margin-left:auto; }
+  footer { text-align:center; color:var(--muted); font-size:.8rem; margin-top:36px; line-height:1.6; }
+  a { color:#7db7ff; }
+  input[type=range] { width:100%; }
+  .manual { margin-top:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Tesla <span class="red">Location Charge Limits</span></h1>
+    <p class="sub">Geofenced charge limits, Rivian-style: Home charges to 80%, the Cabin to 90% —
+      set automatically when your car arrives. Try it below: pick a car, drive it somewhere,
+      and watch the rules fire — exactly once per visit, and your manual trip-day limit
+      is never cut.</p>
+    <div class="badges">
+      <span class="badge"><b>DEMO DATA</b> — pretend cars, pretend places</span>
+      <span class="badge">No real car is connected</span>
+    </div>
+  </header>
+
+  <div class="card">
+    <h2>1 · Pick a car</h2>
+    <div class="row" id="cars"></div>
+  </div>
+
+  <div class="card">
+    <h2>2 · Drive it somewhere</h2>
+    <p class="hint">Tap a place to "drive" the selected car there. The rules engine checks on
+      every arrival — the same logic the real app runs.</p>
+    <div class="row" id="places"></div>
+    <div class="status">
+      <div class="stat"><div class="k">At</div><div class="v" id="stPlace">—</div></div>
+      <div class="stat"><div class="k">Place rule</div><div class="v" id="stRule">—</div></div>
+      <div class="stat"><div class="k">Car's charge limit</div><div class="v" id="stLimit">—</div></div>
+      <div class="stat"><div class="k">Commands sent this visit</div><div class="v" id="stCmds">—</div></div>
+    </div>
+    <div class="manual">
+      <p class="hint">Pretend <b>you</b> changed the limit on the car's screen (like before a road trip),
+        then drive somewhere:</p>
+      <div class="row">
+        <input type="range" id="manual" min="50" max="100" value="80" step="5">
+      </div>
+      <p class="hint">Manual limit: <b id="manualVal">80%</b> <button class="btn" id="applyManual">Set it on the car</button></p>
+    </div>
+    <ul class="log" id="log"></ul>
+    <div class="row"><button class="btn reset" id="reset">↺ Reset demo</button></div>
+  </div>
+
+  <div class="card">
+    <h2>3 · Ask about the rules</h2>
+    <p class="hint">The same chat the app's <code>/v1/chat/completions</code> endpoint serves.
+      Try: <i>what's the limit at the cabin?</i> · <i>which places have rules?</i> ·
+      <i>set the cabin to 90</i> · <i>why is my limit 80% right now?</i></p>
+    <div class="chatlog" id="chatlog"></div>
+    <div class="chat">
+      <input id="chatIn" placeholder="Ask something…" autocomplete="off">
+      <button class="btn cmd" id="chatSend">Ask</button>
+    </div>
+  </div>
+
+  <footer>
+    Interactive proof-of-concept for
+    <a href="https://github.com/rtmalikian/tesla-location-charge-limits">tesla-location-charge-limits</a>
+    — free &amp; open source (MIT). Mirrors the real geofence rules in your browser.
+  </footer>
+</div>
+
+<script>
+const PLACES = [
+  {name:"Home",   limit:80, desc:"Home · 80% · radius 150 m"},
+  {name:"Office", limit:80, desc:"Office · 80% · radius 150 m"},
+  {name:"Cabin",  limit:90, desc:"Cabin · 90% · radius 150 m"},
+  {name:"Road",   limit:null, desc:"On the road · no rule"},
+];
+const CARS = [
+  {name:"Model Y", place:"Road", limit:80, inside:null, applied:{}},
+  {name:"Model 3", place:"Road", limit:80, inside:null, applied:{}},
+];
+let active = 0;
+
+const $ = id => document.getElementById(id);
+
+function placeRule(name){ return PLACES.find(p=>p.name===name); }
+
+function log(text, cls){
+  const li = document.createElement("li");
+  li.className = cls || "none";
+  li.textContent = text;
+  $("log").prepend(li);
+}
+
+function refresh(){
+  document.querySelectorAll("#cars .btn").forEach((b,i)=>b.classList.toggle("active", i===active));
+  document.querySelectorAll("#places .btn").forEach(b=>b.classList.toggle("active", b.dataset.place===CARS[active].place));
+  const c = CARS[active];
+  $("stPlace").textContent = c.place;
+  const rule = placeRule(c.place);
+  $("stRule").textContent = rule.limit==null ? "none" : rule.limit+"%";
+  $("stLimit").textContent = c.limit+"%";
+  const n = Object.keys(c.applied).length;
+  $("stCmds").textContent = n + " (this visit: " + (c.inside ? 1 : 0) + " rule applied)";
+}
+
+function drive(placeName){
+  const c = CARS[active];
+  if (placeName === c.place){ log(c.name+" is already "+placeName+" — nothing to do.", "none"); return; }
+  c.place = placeName;
+  const rule = placeRule(placeName);
+  if (!rule.limit){ // left for the road: departure resets the visit
+    if (c.inside){ log(c.name+" left "+c.inside+" — visit closed; next arrival will fire the rule again.", "none"); }
+    c.inside = null; c.applied = {};
+    refresh(); return;
+  }
+  if (c.inside === rule.name && c.applied[rule.name]){
+    log(c.name+" is still at "+rule.name+" — rule already applied this visit. Not sending it again.", "none");
+    refresh(); return;
+  }
+  c.inside = rule.name; c.applied[rule.name] = true;
+  if (c.limit === rule.limit){
+    log(c.name+" arrived at "+rule.name+" — limit is already "+rule.limit+"%. Nothing to send.", "none");
+  } else if (c.limit > rule.limit){
+    log(c.name+" arrived at "+rule.name+", but its limit is "+c.limit+"% — higher than this place's "+rule.limit+"% rule. Leaving it alone so your trip charge isn't cut (trip-mode override).", "skip");
+  } else {
+    c.limit = rule.limit;
+    log("★ "+c.name+" arrived at "+rule.name+" — sent set_charge_limit("+rule.limit+") — exactly once this visit.", "send");
+  }
+  refresh();
+}
+
+function ask(q){
+  const t = q.trim().toLowerCase();
+  const wrap = $("chatlog");
+  const dq = document.createElement("div"); dq.className="q"; dq.textContent="> "+q; wrap.appendChild(dq);
+  const da = document.createElement("div"); da.className="a";
+  let a;
+  if (/(which|what|list|show)\s+(places|locations|rules)/.test(t)){
+    a = "Here's where I set charge limits: " + PLACES.filter(p=>p.limit).map(p=>p.name+" → "+p.limit+"%").join(", ")+".";
+  } else if (/set\s+(the\s+)?(.+?)\s+(to|at)\s+(\d{1,3})/.test(t)){
+    const m = t.match(/set\s+(the\s+)?(.+?)\s+(to|at)\s+(\d{1,3})/);
+    const pl = PLACES.find(p=>p.name.toLowerCase().startsWith(m[2].trim())||m[2].trim().startsWith(p.name.toLowerCase()));
+    if (pl && pl.limit){
+      pl.limit = Math.max(50, Math.min(100, parseInt(m[4],10)));
+      pl.desc = pl.name+" · "+pl.limit+"% · radius 150 m";
+      a = "Set "+pl.name+" to "+pl.limit+"%. (In the real app this is saved to your .env.)";
+    } else a = "I don't have a place by that name here.";
+  } else if (/(limit|charge).{0,20}(at|for)\s+(the\s+)?(.+)/.test(t)){
+    const m = t.match(/(limit|charge).{0,20}(at|for)\s+(the\s+)?(.+?)[?!.]?\s*$/);
+    const pl = PLACES.find(p=>p.name.toLowerCase().startsWith((m[4]||"").trim())||(m[4]||"").trim().startsWith(p.name.toLowerCase()));
+    a = pl && pl.limit ? "The "+pl.name+" rule charges to "+pl.limit+"%." : "I don't have a place by that name here.";
+  } else if (/\bwhy\b/.test(t)){
+    a = CARS.map(c=>{ const r=placeRule(c.place); return c.name+" is "+(r.limit?("at "+r.name+", so the "+r.limit+"% rule applies"):"on the road, so no rule applies")+" — its limit reads "+c.limit+"%."; }).join(" ");
+  } else {
+    a = "I manage per-place charge limits (DEMO DATA). Ask: \"what's the limit at the cabin?\", \"which places have rules?\", \"set the cabin to 90\", or \"why is my limit 80% right now?\"";
+  }
+  da.textContent = a; wrap.appendChild(da);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+// build UI
+CARS.forEach((c,i)=>{
+  const b=document.createElement("button"); b.className="btn"; b.textContent=c.name;
+  b.onclick=()=>{active=i; refresh();}; $("cars").appendChild(b);
+});
+PLACES.forEach(p=>{
+  const b=document.createElement("button"); b.className="btn"; b.dataset.place=p.name;
+  b.innerHTML=p.name+"<small>"+(p.limit==null?"no rule":p.limit+"% limit")+"</small>";
+  b.onclick=()=>drive(p.name); $("places").appendChild(b);
+});
+$("manual").oninput=e=>$("manualVal").textContent=e.target.value+"%";
+$("applyManual").onclick=()=>{ CARS[active].limit=parseInt($("manual").value,10);
+  log("You set "+CARS[active].name+" to "+$("manual").value+"% on the car's screen.", "none"); refresh(); };
+$("reset").onclick=()=>{ CARS.forEach(c=>{c.place="Road";c.limit=80;c.inside=null;c.applied={};});
+  PLACES.forEach(p=>{ if(p.name==="Cabin")p.limit=90; if(p.name==="Home"||p.name==="Office")p.limit=80; });
+  $("log").innerHTML=""; $("chatlog").innerHTML=""; refresh();
+  log("Demo reset — both cars on the road at 80%.","none"); };
+$("chatSend").onclick=()=>{ const v=$("chatIn").value; if(v.trim()){ask(v); $("chatIn").value="";} };
+$("chatIn").addEventListener("keydown",e=>{ if(e.key==="Enter") $("chatSend").click(); });
+
+refresh();
+log("Welcome! Pick a car, then drive it to Home — the 80% rule fires exactly once.","none");
+log("Try the trip-mode override: set the car to 100% yourself, drive away, then come back to the Cabin.","none");
+</script>
+</body>
+</html>
